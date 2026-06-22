@@ -42,6 +42,12 @@ AUDIO = {   # slug стиха → mp3-файл в /music (песня на эти
     "o-materi":   "kvas-varganili.mp3",
 }
 
+# Ручные привязки цитат в статьях к стихам — для случаев, где авто-сопоставление
+# не срабатывает из-за искажений (OCR). Ключ — нормализованная первая строка цитаты.
+MANUAL_LINKS = {
+    "а походах щеки впалые": ("na-otchey-storone", "v-more"),
+}
+
 struct = json.load(open(os.path.join(HERE, "struct.json"), encoding="utf-8"))
 
 
@@ -168,6 +174,7 @@ NAV = [
     ("/st/", "Стихи"),
     ("/ob-avtore/", "Об авторе"),
     ("/elektronnye-knigi/", "Электронные книги"),
+    ("/poisk/", "Поиск"),
 ]
 
 
@@ -314,6 +321,10 @@ def _find_source(qlines, corpus, poemreg, poemconcat):
     kind='exact' — дословное непрерывное совпадение (можно воспроизвести точно);
     kind='fuzzy' — стих найден (по подстроке или ≥2 строкам) — только ссылка."""
     nq = [_norm(q) for q in qlines]
+    # 0) ручная привязка (искажённые OCR-цитаты)
+    if nq and nq[0] in MANUAL_LINKS:
+        coll, slug = MANUAL_LINKS[nq[0]]
+        return ("fuzzy", coll, slug, None)
     # 1) точное непрерывное совпадение по строкам
     for coll, slug, pidx in corpus.get(nq[0], []):
         seg = poemreg[(coll, slug)][1][pidx:pidx + len(qlines)]
@@ -605,6 +616,34 @@ def build():
          description=f"Электронные книги поэта {AUTHOR}а — чтение и скачивание.",
          body=body, active="/elektronnye-knigi/",
          canonical=f"{DOMAIN}/elektronnye-knigi/")
+
+    # 8b) поиск: индекс + страница
+    search_index = []
+    for coll, name in COLLECTIONS:
+        for s in struct.get(coll, []):
+            title, lines = poems[(coll, s)]
+            body_txt = "\n".join(ru_dashes(t) for t, _i, _it in lines if t)
+            search_index.append({"t": ru_dashes(title), "u": f"/st/{coll}/{s}/",
+                                  "c": name, "b": body_txt})
+    for slug, who in [("aleksandr-sytin", "Александр Сытин"),
+                      ("larisa-kuznecova", "Лариса Кузнецова")]:
+        soup = load(f"/ob-avtore/{slug}")
+        txt = "\n".join(line_of(p)[0] for p in content_paragraphs(soup) if line_of(p)[0])
+        search_index.append({"t": page_title(soup, who), "u": f"/ob-avtore/{slug}/",
+                             "c": "Об авторе", "b": txt})
+    open(os.path.join(ROOT, "search-index.json"), "w", encoding="utf-8").write(
+        json.dumps(search_index, ensure_ascii=False, separators=(",", ":")))
+
+    body = (breadcrumbs([("/", "Главная"), (None, "Поиск")])
+            + '<h1 class="page-title">Поиск</h1><hr class="title-rule">'
+            + '<input id="q" class="search-input" type="search" '
+              'placeholder="Искать по стихам…" autocomplete="off" '
+              'aria-label="Поиск по сайту">'
+            + '<div id="results" class="search-results"></div>'
+            + '<script src="/assets/search.js" defer></script>')
+    page("/poisk/index.html", title=f"Поиск — {SITE}",
+         description=f"Поиск по стихам {AUTHOR}а.",
+         body=body, active="/poisk/", canonical=f"{DOMAIN}/poisk/")
 
     # 9) служебные файлы
     write_sitemap()
