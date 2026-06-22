@@ -233,14 +233,77 @@ def poem_body_html(lines):
     return '<div class="poem">' + "\n".join(out) + "</div>"
 
 
-def prose_body_html(lines):
-    out = []
-    for text, indent in lines:
-        if text == "":
+QUOTE_CHARS = "«»\"„“”  "
+_UPPER = re.compile(r"[А-ЯЁ]{4,}")
+
+
+def _norm(s):
+    s = s.lower().replace("ё", "е")
+    s = re.sub(r"[^а-я ]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _is_prose(text, indent):
+    """Абзац прозы: красная строка (ind 3–6), длинное предложение или строка
+    с двоеточием. Иначе — поэтическая строка (цитата)."""
+    if indent in (3, 4, 5, 6):
+        return True
+    if len(text) > 55:
+        return True
+    if text.endswith(":") and len(text) > 12:
+        return True
+    return False
+
+
+def render_about(lines, corpus, poemreg):
+    """Проза без красных строк; цитаты стихов — в общем стиле .poem,
+    с точным текстом из наших стихов и ссылкой на полный текст, если найдено."""
+    lines = [(t, i) for t, i in lines if t != ""]
+    # сгруппировать в блоки прозы / цитат
+    groups = []
+    i, n = 0, len(lines)
+    while i < n:
+        t, ind = lines[i]
+        if _is_prose(t, ind):
+            groups.append(("prose", [i])); i += 1
+        else:
+            j = i
+            while j < n and not _is_prose(*lines[j]):
+                j += 1
+            groups.append(("quote", list(range(i, j)))); i = j
+
+    parts = []
+    for gi, (kind, idxs) in enumerate(groups):
+        if kind == "prose":
+            parts.append(f"<p>{esc(lines[idxs[0]][0])}</p>")
             continue
-        style = f' style="--i:{indent}"' if indent else ""
-        out.append(f"<p{style}>{esc(text)}</p>")
-    return '<div class="prose">' + "\n".join(out) + "</div>"
+        qlines = [lines[x][0].strip(QUOTE_CHARS) for x in idxs]
+        # подпись автора в конце (есть слово ЗАГЛАВНЫМИ) — отдельный стиль
+        if gi == len(groups) - 1 and any(_UPPER.search(x) for x in qlines):
+            sig = "".join(f"<span>{esc(x)}</span>" for x in qlines)
+            parts.append(f'<div class="prose-signature">{sig}</div>')
+            continue
+        # одиночная строка — подзаголовок
+        if len(qlines) == 1:
+            parts.append(f'<p class="prose-sub">{esc(qlines[0])}</p>')
+            continue
+        # попытка точного совпадения с нашим стихом
+        match = None
+        for coll, slug, pidx in corpus.get(_norm(qlines[0]), []):
+            seg = poemreg[(coll, slug)][1][pidx:pidx + len(qlines)]
+            if [_norm(t) for t, _ in seg] == [_norm(q) for q in qlines]:
+                match = (coll, slug, pidx); break
+        if match:
+            coll, slug, pidx = match
+            title, plines = poemreg[(coll, slug)]
+            seg = plines[pidx:pidx + len(qlines)]
+            link = (f'<p class="quote-source"><a href="/st/{coll}/{slug}/">'
+                    f'полный текст: «{esc(title)}»</a></p>')
+            parts.append(f'<blockquote class="quote">{poem_body_html(seg)}{link}</blockquote>')
+        else:
+            seg = [(lines[x][0].strip(QUOTE_CHARS), lines[x][1]) for x in idxs]
+            parts.append(f'<blockquote class="quote">{poem_body_html(seg)}</blockquote>')
+    return '<div class="prose">' + "\n".join(parts) + "</div>"
 
 
 def first_lines(lines, n=2):
@@ -257,6 +320,15 @@ def build():
     for coll, slugs in struct.items():
         for s in slugs:
             poems[(coll, s)] = parse_poem(f"/st/{coll}/{s}")
+
+    # корпус строк для сопоставления цитат в статьях об авторе
+    poemreg = {}   # (coll, slug) -> (title, [(text, indent) непустых строк])
+    corpus = {}    # _norm(text) -> [(coll, slug, idx_среди_непустых)]
+    for (coll, s), (title, lines) in poems.items():
+        nonempty = [(t, ind) for t, ind in lines if t]
+        poemreg[(coll, s)] = (title, nonempty)
+        for idx, (t, _ind) in enumerate(nonempty):
+            corpus.setdefault(_norm(t), []).append((coll, s, idx))
 
     portrait = download_portrait()
 
@@ -396,7 +468,7 @@ def build():
         body = (breadcrumbs([("/", "Главная"), ("/ob-avtore/", "Об авторе"),
                              (None, title)])
                 + f'<h1 class="page-title">{esc(title)}</h1><hr class="title-rule">'
-                + prose_body_html(lines))
+                + render_about(lines, corpus, poemreg))
         desc = next((t for t, _ in lines if t), title)[:200]
         page(f"/ob-avtore/{slug}/index.html", title=f"{esc(title)} — {SITE}",
              description=desc, body=body, active="/ob-avtore/",
@@ -419,10 +491,10 @@ def build():
             '<img src="/assets/ibooks-icon.svg" alt="Формат iBooks" width="58" height="58"></span>'
             '<span class="book-card__body">'
             f'<span class="book-card__title">{esc(btitle)}</span>'
-            f'<span class="book-card__meta"><span class="badge">iBooks</span>'
-            f'Apple Books · {size_mb:.1f} МБ</span>'
-            f'<a class="btn" href="/books/{fname}" download>Скачать книгу</a>'
-            '</span></li>')
+            f'<span class="book-card__meta">Формат iBooks (Apple Books) · {size_mb:.1f} МБ</span>'
+            '</span>'
+            f'<a class="btn book-card__btn" href="/books/{fname}" download>Скачать</a>'
+            '</li>')
     body = (breadcrumbs([("/", "Главная"), (None, "Электронные книги")])
             + '<h1 class="page-title">Электронные книги</h1><hr class="title-rule">'
             + '<p class="center">Сборники стихов в формате <strong>iBooks</strong> '
