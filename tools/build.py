@@ -659,7 +659,7 @@ def build():
 
 def all_urls():
     urls = ["/", "/st/", "/ob-avtore/", "/ob-avtore/aleksandr-sytin/",
-            "/ob-avtore/larisa-kuznecova/", "/elektronnye-knigi/"]
+            "/ob-avtore/larisa-kuznecova/", "/elektronnye-knigi/", "/poisk/"]
     for coll, _ in COLLECTIONS:
         urls.append(f"/st/{coll}/")
         for s in struct.get(coll, []):
