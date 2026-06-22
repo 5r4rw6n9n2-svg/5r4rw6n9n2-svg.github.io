@@ -135,8 +135,19 @@ def download_portrait():
 # --------------------------------------------------------------------------- #
 #  Шаблон                                                                      #
 # --------------------------------------------------------------------------- #
+def ru_dashes(s):
+    """Типографика: лишние пробелы убрать; дефис/эн-деш, употреблённый как
+    тире (окружён пробелами / в начале / в конце строки), → тире «—»
+    с неразрывным пробелом перед ним. Внутрисловные дефисы не трогаем."""
+    s = re.sub(r" {2,}", " ", s)
+    s = re.sub(r"(?<=\S) [-–] (?=\S)", " — ", s)   # середина: сло­во — слово
+    s = re.sub(r" [-–](?=\s*$)", " —", s)            # конец строки
+    s = re.sub(r"^[-–] ", "— ", s)                        # начало строки
+    return s
+
+
 def esc(s):
-    return html.escape(s, quote=True)
+    return html.escape(ru_dashes(s), quote=True)
 
 
 NAV = [
@@ -211,6 +222,7 @@ def page(out_path, *, title, description, body, active="/", canonical,
 <footer class="site-footer">
 <p>© {esc(AUTHOR)}. Стихи и материалы сайта.</p>
 </footer>
+<script defer src="/assets/poem-align.js"></script>
 </body>
 </html>
 """
@@ -228,8 +240,8 @@ def poem_body_html(lines):
         if text == "":
             out.append('<span class="stanza-break"></span>')
         else:
-            style = f' style="--i:{indent}"' if indent else ""
-            out.append(f'<span class="l"{style}>{esc(text)}</span>')
+            attr = f' style="--i:{indent}" data-i="{indent}"' if indent else ""
+            out.append(f'<span class="l"{attr}>{esc(text)}</span>')
     return '<div class="poem">' + "\n".join(out) + "</div>"
 
 
@@ -425,11 +437,9 @@ def build():
         + portrait_html
         + f'<h1 class="page-title">{esc(AUTHOR)}</h1>'
         + '<hr class="title-rule">'
-        + '<p class="intro__lead">Стихи о родной земле, природе и памяти. '
-          'Четыре поэтических сборника и страницы об авторе.</p>'
+        + '<p class="intro__lead">Стихи о родной земле, природе и памяти.</p>'
         + '</div>'
-        + ('<p class="featured-label">Из стихов'
-           + (f' · {esc(date)}' if date else "") + '</p>')
+        + (f'<p class="featured-label">{esc(date)}</p>' if date else "")
         + poem_body_html(hlines)
         + '<p class="center" style="margin-top:2.5rem">'
           '<a class="btn" href="/st/">Все стихи →</a></p>'
