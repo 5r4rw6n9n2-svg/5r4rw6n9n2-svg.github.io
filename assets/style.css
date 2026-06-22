@@ -1,0 +1,276 @@
+/* ===========================================================================
+   Николай Шеламов — классический литературный стиль
+   Тёплый «бумажный» фон, антиква, книжная типографика.
+   =========================================================================== */
+
+:root {
+  --paper:      #faf6ec;   /* фон страницы — тёплая бумага */
+  --paper-deep: #f3ecdb;   /* блоки/подложки */
+  --ink:        #2b2118;   /* основной текст — тёмно-коричневый */
+  --ink-soft:   #5c4f3f;   /* второстепенный текст */
+  --line:       #ddd0b5;   /* линии/разделители */
+  --accent:     #7c2d12;   /* акцент — приглушённый кирпично-красный */
+  --accent-soft:#a8521e;
+  --maxw:       42rem;
+  --serif: "PT Serif", "Liberation Serif", Georgia, "Times New Roman", "Noto Serif", serif;
+  --serif-display: "PT Serif", Georgia, "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.18rem;
+  line-height: 1.7;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* лёгкая бумажная текстура «в линейку» по краям не нужна — оставляем чистоту */
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-soft); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- Шапка ---------------------------------------------------------- */
+.site-header {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.site-header__inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 1.6rem 1.25rem 1.1rem;
+  text-align: center;
+}
+.site-title {
+  font-family: var(--serif-display);
+  font-size: 1.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0;
+  font-weight: 700;
+}
+.site-title a { color: var(--ink); }
+.site-title a:hover { color: var(--ink); text-decoration: none; }
+.site-tagline {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-style: italic;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Навигация ------------------------------------------------------ */
+.nav {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-deep);
+}
+.nav__inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 1.5rem;
+}
+.nav a {
+  color: var(--ink-soft);
+  font-size: 0.98rem;
+  letter-spacing: 0.04em;
+  padding: 0.35rem 0.2rem;
+  text-transform: uppercase;
+}
+.nav a:hover { color: var(--accent); text-decoration: none; }
+.nav a[aria-current="page"] {
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+
+/* ---------- Основная область ---------------------------------------------- */
+main {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 3rem;
+}
+
+.breadcrumbs {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  margin-bottom: 1.75rem;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.breadcrumbs a { color: var(--ink-soft); }
+.breadcrumbs span[aria-current] { color: var(--ink); }
+
+h1.page-title {
+  font-family: var(--serif-display);
+  font-weight: 700;
+  font-size: 2rem;
+  line-height: 1.2;
+  text-align: center;
+  margin: 0 0 0.5rem;
+}
+.page-title + .page-date {
+  text-align: center;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin: 0 0 1.5rem;
+}
+.title-rule {
+  width: 4rem;
+  height: 1px;
+  background: var(--line);
+  border: 0;
+  margin: 1.25rem auto 2rem;
+  position: relative;
+}
+.title-rule::after {
+  content: "❧";
+  position: absolute;
+  top: -0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--paper);
+  padding: 0 0.6rem;
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+/* ---------- Стихотворение -------------------------------------------------- */
+/* Блок центрируется по горизонтали, текст внутри — по левому краю.
+   Ширина блока подгоняется под самую длинную строку. */
+.poem {
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: left;
+  font-size: 1.22rem;
+  line-height: 1.85;
+}
+.poem .l {
+  display: block;
+  /* «лесенка»: отступ строки = число ведущих пробелов оригинала × ширину символа.
+     padding-left даёт висячий отступ при переносе длинной строки. */
+  padding-left: calc(var(--i, 0) * 1ch);
+}
+.poem .stanza-break { height: 0.9em; }
+
+/* ---------- Проза (об авторе) --------------------------------------------- */
+.prose { font-size: 1.12rem; }
+.prose p {
+  margin: 0 0 1.05rem;
+  text-indent: calc(var(--i, 0) * 0.5ch);
+}
+.prose p.poem-line {
+  text-indent: 0;
+  padding-left: calc(var(--i, 0) * 1ch);
+  margin: 0;
+  line-height: 1.7;
+}
+
+/* ---------- Листание prev/next -------------------------------------------- */
+.poem-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 3rem auto 0;
+  max-width: var(--maxw);
+  border-top: 1px solid var(--line);
+  padding-top: 1.25rem;
+  font-size: 0.98rem;
+}
+.poem-nav a { display: inline-flex; flex-direction: column; max-width: 45%; }
+.poem-nav .dir { color: var(--ink-soft); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.poem-nav .t { font-style: italic; }
+.poem-nav .prev { text-align: left; margin-right: auto; }
+.poem-nav .next { text-align: right; margin-left: auto; }
+.poem-nav .to-collection { align-self: center; text-align: center; color: var(--ink-soft); }
+
+/* ---------- Списки (оглавления) ------------------------------------------- */
+.collection-list, .poem-list { list-style: none; padding: 0; margin: 2rem auto 0; max-width: 34rem; }
+.poem-list li { border-bottom: 1px solid var(--line); }
+.poem-list li:first-child { border-top: 1px solid var(--line); }
+.poem-list a {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.7rem 0.25rem;
+  color: var(--ink);
+}
+.poem-list a:hover { color: var(--accent); text-decoration: none; background: var(--paper-deep); }
+.poem-list .t { font-size: 1.12rem; }
+.poem-list .preview { color: var(--ink-soft); font-style: italic; font-size: 0.92rem; text-align: right; flex: 1; }
+
+.collection-list li { margin: 0 0 1.5rem; text-align: center; }
+.collection-list .c-title { font-family: var(--serif-display); font-size: 1.5rem; }
+.collection-list .c-count { color: var(--ink-soft); font-size: 0.95rem; display: block; margin-top: 0.2rem; }
+
+/* ---------- Главная -------------------------------------------------------- */
+.intro { text-align: center; }
+.portrait {
+  display: block;
+  max-width: 220px;
+  width: 60%;
+  height: auto;
+  margin: 0 auto 1.5rem;
+  border: 6px solid #fff;
+  box-shadow: 0 3px 14px rgba(43, 33, 24, 0.18);
+}
+.intro__lead { font-size: 1.15rem; color: var(--ink-soft); max-width: 32rem; margin: 0 auto 2rem; }
+.featured-label {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  margin: 2.5rem 0 0.5rem;
+}
+
+/* ---------- Кнопка (электронные книги) ------------------------------------ */
+.btn {
+  display: inline-block;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.7rem 1.6rem;
+  border-radius: 2px;
+  letter-spacing: 0.03em;
+  margin-top: 1rem;
+}
+.btn:hover { background: var(--accent); color: var(--paper); text-decoration: none; }
+.center { text-align: center; }
+
+/* ---------- Подвал --------------------------------------------------------- */
+.site-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  background: var(--paper-deep);
+  text-align: center;
+  padding: 1.75rem 1.25rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.site-footer a { color: var(--ink-soft); }
+
+/* ---------- Адаптив -------------------------------------------------------- */
+@media (max-width: 600px) {
+  body { font-size: 1.08rem; }
+  .poem { font-size: 1.12rem; }
+  h1.page-title { font-size: 1.6rem; }
+  .site-title { font-size: 1.35rem; }
+  .nav__inner { gap: 0.25rem 1rem; }
+  .poem-list a { flex-direction: column; gap: 0.15rem; }
+  .poem-list .preview { text-align: left; }
+}
