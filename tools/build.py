@@ -37,6 +37,11 @@ BOOKS = [   # файл в /books → название книги (формат .
     ("Strofarii.ibooks",       "Строфарии"),
 ]
 
+AUDIO = {   # slug стиха → mp3-файл в /music (песня на эти стихи)
+    "za-klukvoj": "vstali-do-rassveta.mp3",
+    "o-materi":   "kvas-varganili.mp3",
+}
+
 struct = json.load(open(os.path.join(HERE, "struct.json"), encoding="utf-8"))
 
 
@@ -72,12 +77,20 @@ def content_paragraphs(soup):
     return [c for c in parent.children if getattr(c, "name", None) == "p"]
 
 
+def _fully(p, tags):
+    """True, если весь текст абзаца обёрнут в один из тегов tags (em/i/strong/b)."""
+    txt = p.get_text().replace("\xa0", " ").strip()
+    inner = "".join(e.get_text() for e in p.find_all(tags)).replace("\xa0", " ").strip()
+    return bool(txt) and inner == txt
+
+
 def line_of(p):
-    """(текст без крайних пробелов, число ведущих пробелов). '' -> разрыв строфы."""
+    """(текст, число ведущих пробелов, курсив?). '' -> разрыв строфы.
+    Курсив (<em>/<i>) в стихах = посвящение/эпиграф."""
     raw = p.get_text().replace("\xa0", " ").replace("\r", "")
     raw = raw.replace("\n", " ").rstrip()
     indent = len(raw) - len(raw.lstrip(" "))
-    return raw.strip(), indent
+    return raw.strip(), indent, _fully(p, ["em", "i"])
 
 
 def page_title(soup, fallback):
@@ -235,14 +248,36 @@ def page(out_path, *, title, description, body, active="/", canonical,
 #  Рендер контента                                                            #
 # --------------------------------------------------------------------------- #
 def poem_body_html(lines):
-    out = []
-    for text, indent in lines:
+    """lines: список (текст, отступ, курсив?). Курсивные строки рендерятся
+    отдельным блоком посвящения (справа) или эпиграфа (для длинных)."""
+    blocks = []
+    verse = []
+
+    def flush():
+        if verse:
+            blocks.append('<div class="poem">' + "\n".join(verse) + "</div>")
+            verse.clear()
+
+    i, n = 0, len(lines)
+    while i < n:
+        text, indent, ital = lines[i]
+        if text and ital:
+            flush()
+            run = []
+            while i < n and lines[i][0] and lines[i][2]:
+                run.append(lines[i][0]); i += 1
+            cls = "epigraph" if any(len(x) > 70 for x in run) else "dedication"
+            blocks.append(f'<div class="{cls}">'
+                          + "".join(f"<span>{esc(x)}</span>" for x in run) + "</div>")
+            continue
         if text == "":
-            out.append('<span class="stanza-break"></span>')
+            verse.append('<span class="stanza-break"></span>')
         else:
             attr = f' style="--i:{indent}" data-i="{indent}"' if indent else ""
-            out.append(f'<span class="l"{attr}>{esc(text)}</span>')
-    return '<div class="poem">' + "\n".join(out) + "</div>"
+            verse.append(f'<span class="l"{attr}>{esc(text)}</span>')
+        i += 1
+    flush()
+    return "\n".join(blocks)
 
 
 QUOTE_CHARS = "«»\"„“”  "
@@ -267,59 +302,108 @@ def _is_prose(text, indent):
     return False
 
 
-def render_about(lines, corpus, poemreg):
-    """Проза без красных строк; цитаты стихов — в общем стиле .poem,
-    с точным текстом из наших стихов и ссылкой на полный текст, если найдено."""
-    lines = [(t, i) for t, i in lines if t != ""]
-    # сгруппировать в блоки прозы / цитат
+def _coll_rank(coll):
+    for i, (c, _) in enumerate(COLLECTIONS):
+        if c == coll:
+            return i
+    return 99
+
+
+def _find_source(qlines, corpus, poemreg, poemconcat):
+    """Ищет наш стих-источник цитаты. Возвращает (kind, coll, slug, pidx):
+    kind='exact' — дословное непрерывное совпадение (можно воспроизвести точно);
+    kind='fuzzy' — стих найден (по подстроке или ≥2 строкам) — только ссылка."""
+    nq = [_norm(q) for q in qlines]
+    # 1) точное непрерывное совпадение по строкам
+    for coll, slug, pidx in corpus.get(nq[0], []):
+        seg = poemreg[(coll, slug)][1][pidx:pidx + len(qlines)]
+        if [_norm(t) for t, _i, _it in seg] == nq:
+            return ("exact", coll, slug, pidx)
+    # 2) по склеенному тексту (ловит разную разбивку на строки / лесенку)
+    qc = " ".join(x for x in nq if x)
+    if len(qc) >= 20:
+        hits = [cs for cs, pc in poemconcat.items() if qc in pc]
+        if hits:
+            hits.sort(key=lambda k: _coll_rank(k[0]))
+            return ("fuzzy", hits[0][0], hits[0][1], None)
+    # 3) по числу совпавших строк (цитата с пропусками «…»)
+    cnt = {}
+    for q in nq:
+        for coll, slug, _idx in corpus.get(q, []):
+            cnt[(coll, slug)] = cnt.get((coll, slug), 0) + 1
+    if cnt:
+        best = max(cnt.values())
+        if best >= 2:
+            winners = sorted((k for k, v in cnt.items() if v == best),
+                             key=lambda k: _coll_rank(k[0]))
+            return ("fuzzy", winners[0][0], winners[0][1], None)
+    return None
+
+
+def render_about(paras, corpus, poemreg, poemconcat):
+    """paras: список dict(t, ind, em, strong).
+    <strong> → заголовок; <em>/«ёлочки»/короткие строки → цитаты стихов
+    (в общем «стиховом» стиле, со ссылкой на полный текст); остальное — проза
+    без красных строк. Подпись автора (курсив, ЗАГЛАВНЫМИ в конце) — особый стиль."""
+    paras = [p for p in paras if p["t"] != ""]
+
+    def kind_of(p):
+        if p["strong"]:
+            return "title"
+        if p["em"]:
+            return "quote"
+        if _is_prose(p["t"], p["ind"]):
+            return "prose"
+        return "quote"
+
+    # сгруппировать подряд идущие цитатные строки
     groups = []
-    i, n = 0, len(lines)
+    i, n = 0, len(paras)
     while i < n:
-        t, ind = lines[i]
-        if _is_prose(t, ind):
-            groups.append(("prose", [i])); i += 1
-        else:
+        k = kind_of(paras[i])
+        if k == "quote":
             j = i
-            while j < n and not _is_prose(*lines[j]):
+            while j < n and kind_of(paras[j]) == "quote":
                 j += 1
             groups.append(("quote", list(range(i, j)))); i = j
+        else:
+            groups.append((k, [i])); i += 1
 
     parts = []
     for gi, (kind, idxs) in enumerate(groups):
         if kind == "prose":
-            parts.append(f"<p>{esc(lines[idxs[0]][0])}</p>")
+            parts.append(f"<p>{esc(paras[idxs[0]]['t'])}</p>")
             continue
-        qlines = [lines[x][0].strip(QUOTE_CHARS) for x in idxs]
-        # подпись автора в конце (есть слово ЗАГЛАВНЫМИ) — отдельный стиль
-        if gi == len(groups) - 1 and any(_UPPER.search(x) for x in qlines):
-            sig = "".join(f"<span>{esc(x)}</span>" for x in qlines)
+        if kind == "title":
+            parts.append(f'<p class="article-heading">{esc(paras[idxs[0]]["t"])}</p>')
+            continue
+        # quote
+        qpairs = [(paras[x]["t"].strip(QUOTE_CHARS), paras[x]["ind"]) for x in idxs]
+        qlines = [t for t, _ in qpairs]
+        all_em = all(paras[x]["em"] for x in idxs)
+        # подпись автора в самом конце (курсив + слово ЗАГЛАВНЫМИ)
+        if gi == len(groups) - 1 and all_em and any(_UPPER.search(t) for t in qlines):
+            sig = "".join(f"<span>{esc(t)}</span>" for t in qlines)
             parts.append(f'<div class="prose-signature">{sig}</div>')
             continue
-        # одиночная строка — подзаголовок
-        if len(qlines) == 1:
-            parts.append(f'<p class="prose-sub">{esc(qlines[0])}</p>')
-            continue
-        # попытка точного совпадения с нашим стихом
-        match = None
-        for coll, slug, pidx in corpus.get(_norm(qlines[0]), []):
-            seg = poemreg[(coll, slug)][1][pidx:pidx + len(qlines)]
-            if [_norm(t) for t, _ in seg] == [_norm(q) for q in qlines]:
-                match = (coll, slug, pidx); break
-        if match:
-            coll, slug, pidx = match
-            title, plines = poemreg[(coll, slug)]
-            seg = plines[pidx:pidx + len(qlines)]
+        src = _find_source(qlines, corpus, poemreg, poemconcat)
+        link = ""
+        if src:
+            _kind, coll, slug, pidx = src
+            title = poemreg[(coll, slug)][0]
             link = (f'<p class="quote-source"><a href="/st/{coll}/{slug}/">'
                     f'полный текст: «{esc(title)}»</a></p>')
-            parts.append(f'<blockquote class="quote">{poem_body_html(seg)}{link}</blockquote>')
+        if src and src[0] == "exact":
+            _k, coll, slug, pidx = src
+            seg = poemreg[(coll, slug)][1][pidx:pidx + len(qlines)]
         else:
-            seg = [(lines[x][0].strip(QUOTE_CHARS), lines[x][1]) for x in idxs]
-            parts.append(f'<blockquote class="quote">{poem_body_html(seg)}</blockquote>')
+            seg = [(t, ind, False) for t, ind in qpairs]
+        parts.append(f'<blockquote class="quote">{poem_body_html(seg)}{link}</blockquote>')
     return '<div class="prose">' + "\n".join(parts) + "</div>"
 
 
 def first_lines(lines, n=2):
-    res = [t for t, _ in lines if t][:n]
+    res = [x[0] for x in lines if x[0] and not x[2]][:n]
     return " / ".join(res)
 
 
@@ -334,12 +418,14 @@ def build():
             poems[(coll, s)] = parse_poem(f"/st/{coll}/{s}")
 
     # корпус строк для сопоставления цитат в статьях об авторе
-    poemreg = {}   # (coll, slug) -> (title, [(text, indent) непустых строк])
-    corpus = {}    # _norm(text) -> [(coll, slug, idx_среди_непустых)]
+    poemreg = {}     # (coll, slug) -> (title, [(text, indent, ital) непустых строк])
+    corpus = {}      # _norm(text) -> [(coll, slug, idx_среди_непустых)]
+    poemconcat = {}  # (coll, slug) -> склеенный нормализованный текст стиха
     for (coll, s), (title, lines) in poems.items():
-        nonempty = [(t, ind) for t, ind in lines if t]
+        nonempty = [(t, ind, it) for t, ind, it in lines if t]
         poemreg[(coll, s)] = (title, nonempty)
-        for idx, (t, _ind) in enumerate(nonempty):
+        poemconcat[(coll, s)] = " ".join(_norm(t) for t, _i, _it in nonempty)
+        for idx, (t, _ind, _it) in enumerate(nonempty):
             corpus.setdefault(_norm(t), []).append((coll, s, idx))
 
     portrait = download_portrait()
@@ -368,11 +454,19 @@ def build():
                            f'<span class="t">{esc(nt)}</span></a>')
             nav.append("</nav>")
 
+            audio = ""
+            if s in AUDIO:
+                audio = (
+                    '<figure class="song">'
+                    '<figcaption>Песня на эти стихи</figcaption>'
+                    f'<audio controls preload="none" src="/music/{AUDIO[s]}"></audio>'
+                    '</figure>')
             body = (breadcrumbs([("/", "Главная"), ("/st/", "Стихи"),
                                  (f"/st/{coll}/", COLL_NAME[coll]), (None, title)])
                     + f'<h1 class="page-title">{esc(title)}</h1>'
                     + '<hr class="title-rule">'
                     + poem_body_html(lines)
+                    + audio
                     + "\n".join(nav))
             desc = f"{title} — стихотворение. {first_lines(lines)}"
             jsonld = {
@@ -474,23 +568,20 @@ def build():
                       ("larisa-kuznecova", "Лариса Кузнецова")]:
         soup = load(f"/ob-avtore/{slug}")
         title = page_title(soup, who)
-        lines = [line_of(p) for p in content_paragraphs(soup)]
+        paras = []
+        for p in content_paragraphs(soup):
+            t, ind, em = line_of(p)
+            paras.append({"t": t, "ind": ind, "em": em, "strong": _fully(p, ["strong", "b"])})
         body = (breadcrumbs([("/", "Главная"), ("/ob-avtore/", "Об авторе"),
                              (None, title)])
                 + f'<h1 class="page-title">{esc(title)}</h1><hr class="title-rule">'
-                + render_about(lines, corpus, poemreg))
-        desc = next((t for t, _ in lines if t), title)[:200]
+                + render_about(paras, corpus, poemreg, poemconcat))
+        desc = next((p["t"] for p in paras if p["t"] and not p["em"]), title)[:200]
         page(f"/ob-avtore/{slug}/index.html", title=f"{esc(title)} — {SITE}",
              description=desc, body=body, active="/ob-avtore/",
              canonical=f"{DOMAIN}/ob-avtore/{slug}/")
 
     # 8) электронные книги (.ibooks, размещены в /books)
-    soup = load("/elektronnye-knigi")
-    drive = ""
-    for a in main_region(soup).select("a[href]"):
-        if "drive.google.com" in a.get("href", ""):
-            drive = a["href"]
-            break
     cards = []
     for fname, btitle in BOOKS:
         fpath = os.path.join(ROOT, "books", fname)
@@ -509,10 +600,7 @@ def build():
             + '<h1 class="page-title">Электронные книги</h1><hr class="title-rule">'
             + '<p class="center">Сборники стихов в формате <strong>iBooks</strong> '
               '— для приложения «Книги» (Apple&nbsp;Books) на Mac, iPad и iPhone.</p>'
-            + f'<ul class="books">{"".join(cards)}</ul>'
-            + (f'<p class="books-note">Книги также доступны на '
-               f'<a href="{esc(drive)}" target="_blank" rel="noopener">Google&nbsp;Drive</a>.</p>'
-               if drive else ""))
+            + f'<ul class="books">{"".join(cards)}</ul>')
     page("/elektronnye-knigi/index.html", title=f"Электронные книги — {SITE}",
          description=f"Электронные книги поэта {AUTHOR}а — чтение и скачивание.",
          body=body, active="/elektronnye-knigi/",

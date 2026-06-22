@@ -168,6 +168,51 @@ h1.page-title {
 }
 .poem .stanza-break { height: 0.9em; }
 
+/* ---------- Посвящение / эпиграф ------------------------------------------ */
+.dedication {
+  font-style: italic;
+  color: var(--ink-soft);
+  text-align: right;
+  font-size: 0.98rem;
+  line-height: 1.5;
+  max-width: var(--maxw);
+  margin: 0 auto 1.75rem;
+}
+.dedication span { display: block; }
+.epigraph {
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 34rem;
+  margin: 0 auto 1.75rem;
+}
+.epigraph span { display: block; margin-bottom: 0.3rem; }
+
+/* ---------- Песня (аудио) -------------------------------------------------- */
+.song {
+  margin: 2.5rem auto 0;
+  max-width: 30rem;
+  text-align: center;
+}
+.song figcaption {
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+.song audio { width: 100%; }
+
+/* ---------- Заголовок внутри статьи --------------------------------------- */
+.article-heading {
+  font-family: var(--serif-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  text-align: center;
+  margin: 2rem 0 1.5rem;
+}
+
 /* ---------- Проза (об авторе) --------------------------------------------- */
 .prose { font-size: 1.12rem; }
 .prose > p { margin: 0 0 1.05rem; text-indent: 0; }   /* без красных строк */
