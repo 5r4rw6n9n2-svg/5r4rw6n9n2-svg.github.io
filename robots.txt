@@ -1,4 +1,7 @@
 User-agent: *
-Allow: /
+Disallow: /tools/
+Disallow: /README.md
+Disallow: /MAINTENANCE.md
+Disallow: /search-index.json
 
 Sitemap: https://shelamov.ru/sitemap.xml

@@ -677,7 +677,12 @@ def write_sitemap():
 
 
 def write_robots():
-    txt = ("User-agent: *\nAllow: /\n\n"
+    # Контент индексируем; служебные/исходные файлы закрываем от поисковиков.
+    txt = ("User-agent: *\n"
+           "Disallow: /tools/\n"
+           "Disallow: /README.md\n"
+           "Disallow: /MAINTENANCE.md\n"
+           "Disallow: /search-index.json\n\n"
            f"Sitemap: {DOMAIN}/sitemap.xml\n")
     open(os.path.join(ROOT, "robots.txt"), "w", encoding="utf-8").write(txt)
 
