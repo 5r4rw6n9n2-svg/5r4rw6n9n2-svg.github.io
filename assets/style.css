@@ -129,23 +129,24 @@ h1.page-title {
   margin: 0 0 1.5rem;
 }
 .title-rule {
-  width: 4rem;
+  width: 7rem;
   height: 1px;
   background: var(--line);
   border: 0;
   margin: 1.25rem auto 2rem;
   position: relative;
 }
+/* орнамент — чистый CSS-ромб по центру линии (без зависимости от шрифта) */
 .title-rule::after {
-  content: "❧";
+  content: "";
   position: absolute;
-  top: -0.85rem;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  background: var(--paper);
-  padding: 0 0.6rem;
-  color: var(--accent);
-  font-size: 1rem;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  transform: translate(-50%, -50%) rotate(45deg);
+  box-shadow: 0 0 0 5px var(--paper);
 }
 
 /* ---------- Стихотворение -------------------------------------------------- */
