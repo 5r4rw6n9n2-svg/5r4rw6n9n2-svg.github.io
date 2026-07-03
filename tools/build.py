@@ -210,8 +210,16 @@ def page(out_path, *, title, description, body, active="/", canonical,
     desc = esc(description[:300])
     head_extra = ""
     if jsonld:
+        def _typo(v):  # типографика тире и в JSON-LD (esc() тут не участвует)
+            if isinstance(v, str):
+                return ru_dashes(v)
+            if isinstance(v, dict):
+                return {k: _typo(x) for k, x in v.items()}
+            if isinstance(v, list):
+                return [_typo(x) for x in v]
+            return v
         head_extra += '\n<script type="application/ld+json">' + json.dumps(
-            jsonld, ensure_ascii=False) + "</script>"
+            _typo(jsonld), ensure_ascii=False) + "</script>"
     og_img_tag = ""
     if og_image:
         og_img_tag = f'\n<meta property="og:image" content="{DOMAIN}{og_image}">'
