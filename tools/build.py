@@ -30,6 +30,10 @@ COLLECTIONS = [   # порядок отображения и человекоч�
     ("other",             "Вне сборников"),
 ]
 COLL_NAME = dict(COLLECTIONS)
+# Один и тот же стих может входить в несколько сборников. Каноническая копия —
+# в самом раннем по порядку публикации (= порядок COLLECTIONS); остальные копии
+# получают rel=canonical на неё и не попадают в sitemap. Заполняется в build().
+CANONICAL_OF = {}  # (coll, slug) дубля -> (coll, slug) канонической копии
 
 BOOKS = [   # файл в /books → название книги (формат .ibooks / Apple Books)
     ("Naotcheystorone.ibooks", "На отчей стороне"),
@@ -439,6 +443,21 @@ def build():
         for idx, (t, _ind, _it) in enumerate(nonempty):
             corpus.setdefault(_norm(t), []).append((coll, s, idx))
 
+    # дубли между сборниками: совпадают заголовок и полный текст
+    coll_rank = {c: i for i, (c, _n) in enumerate(COLLECTIONS)}
+    CANONICAL_OF.clear()
+    by_text = {}  # (норм. заголовок, норм. текст) -> [(coll, slug)]
+    for (coll, s), (title, _lines) in poems.items():
+        if poemconcat[(coll, s)]:
+            by_text.setdefault((_norm(title), poemconcat[(coll, s)]),
+                               []).append((coll, s))
+    for copies in by_text.values():
+        if len(copies) > 1:
+            primary = min(copies, key=lambda cs: coll_rank[cs[0]])
+            for cs in copies:
+                if cs != primary:
+                    CANONICAL_OF[cs] = primary
+
     portrait = download_portrait()
 
     # 2) страницы стихов с prev/next
@@ -447,7 +466,8 @@ def build():
         for i, s in enumerate(slugs):
             title, lines = poems[(coll, s)]
             url = f"/st/{coll}/{s}/"
-            canonical = DOMAIN + url
+            pc, ps = CANONICAL_OF.get((coll, s), (coll, s))
+            canonical = f"{DOMAIN}/st/{pc}/{ps}/"
             prev_s = slugs[i - 1] if i > 0 else None
             next_s = slugs[i + 1] if i < len(slugs) - 1 else None
             nav = ['<nav class="poem-nav">']
@@ -663,7 +683,8 @@ def all_urls():
     for coll, _ in COLLECTIONS:
         urls.append(f"/st/{coll}/")
         for s in struct.get(coll, []):
-            urls.append(f"/st/{coll}/{s}/")
+            if (coll, s) not in CANONICAL_OF:
+                urls.append(f"/st/{coll}/{s}/")
     return urls
 
 
