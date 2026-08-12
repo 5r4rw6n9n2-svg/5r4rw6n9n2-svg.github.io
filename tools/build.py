@@ -42,8 +42,9 @@ BOOKS = [   # файл в /books → название книги (формат .
 ]
 
 AUDIO = {   # slug стиха → mp3-файл в /music (песня на эти стихи)
-    "za-klukvoj": "vstali-do-rassveta.mp3",
-    "o-materi":   "kvas-varganili.mp3",
+    "za-klukvoj":       "vstali-do-rassveta.mp3",
+    "o-materi":         "kvas-varganili.mp3",
+    "oboldinskoe-leto": "ogorodiki-oboldina.mp3",
 }
 
 # Ручные привязки цитат в статьях к стихам — для случаев, где авто-сопоставление
