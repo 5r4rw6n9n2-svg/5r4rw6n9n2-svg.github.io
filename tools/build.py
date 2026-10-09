@@ -10,7 +10,7 @@
 - SEO: title/description/canonical/OpenGraph/JSON-LD, sitemap.xml, robots.txt.
 Результат пишется в корень репозитория (../ относительно tools/)."""
 
-import os, re, json, html, hashlib, shutil
+import os, re, json, html, hashlib, shutil, subprocess, datetime
 from bs4 import BeautifulSoup
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -697,9 +697,23 @@ def all_urls():
     return urls
 
 
+def lastmod(url):
+    """Дата последнего изменения страницы для <lastmod>: коммит, в котором её
+    index.html менялся последним; если пересборка только что изменила файл
+    (или он ещё не в git) — сегодняшняя дата."""
+    rel = url.lstrip("/") + "index.html"
+    git = ["git", "-C", ROOT]
+    dirty = subprocess.run(git + ["status", "--porcelain", "--", rel],
+                           capture_output=True, text=True).stdout.strip()
+    date = subprocess.run(git + ["log", "-1", "--format=%cs", "--", rel],
+                          capture_output=True, text=True).stdout.strip()
+    return date if date and not dirty else datetime.date.today().isoformat()
+
+
 def write_sitemap():
     items = "\n".join(
-        f"  <url><loc>{DOMAIN}{u}</loc></url>" for u in all_urls())
+        f"  <url><loc>{DOMAIN}{u}</loc><lastmod>{lastmod(u)}</lastmod></url>"
+        for u in all_urls())
     xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
            f"{items}\n</urlset>\n")

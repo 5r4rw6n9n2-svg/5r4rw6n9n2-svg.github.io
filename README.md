@@ -97,7 +97,7 @@
 | **Поиск по сайту** | `search-index.json` + `search.js` + `/poisk/` | Клиентский: индекс грузится в браузер, ищет по заголовкам и тексту, подсветка + сниппет |
 | **Аудио (песни)** | `AUDIO` в `build.py`, `/music/` | На страницах стихов плеер `<audio>` с подписью |
 | **Электронные книги** | `BOOKS` в `build.py`, `/books/` | Карточки .ibooks с иконкой и кнопкой скачивания |
-| **SEO** | `build.py` | `title`/`description`/canonical/OpenGraph/JSON-LD на каждой странице, `sitemap.xml`, `robots.txt`, человекочитаемые URL (сохранены 1:1 со старым сайтом) |
+| **SEO** | `build.py` | `title`/`description`/canonical/OpenGraph/JSON-LD на каждой странице, `sitemap.xml` (с `<lastmod>` из истории git), `robots.txt`, человекочитаемые URL (сохранены 1:1 со старым сайтом) |
 | **Canonical для дублей** | `CANONICAL_OF` в `build.py` | Стих, входящий в несколько сборников, канонизируется на копию в самом раннем сборнике (порядок `COLLECTIONS`); копии исключаются из sitemap. Подробности — `MAINTENANCE.md`, раздел 10 |
 
 ### Конфигурация (в начале `tools/build.py`)
